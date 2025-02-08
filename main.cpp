@@ -1,5 +1,3 @@
-// main.cpp
-
 #include <QApplication>
 #include <QMainWindow>
 #include <QWidget>
@@ -18,14 +16,13 @@
 #include <QFrame>
 #include <QDebug>
 
-// ======================================================================
+// ------------------------------------------------------------------
 // AcquisitionWorker
-// This worker simulates an acquisition process. It “initializes” the detector,
-// then in a loop “captures” a frame (here by generating a random QImage) and
-// emits signals to update both a log and the live view display.
-// In your actual code you would call DetectorInit(), Acquisition_Acquire_Image(),
-// and so on from Acq.h.
-// ======================================================================
+// This worker simulates an acquisition process by generating a new
+// grayscale image (with random pixel values) every second.
+// In your real application, replace this simulated code with your actual
+// image-acquisition API calls.
+// ------------------------------------------------------------------
 class AcquisitionWorker : public QObject {
     Q_OBJECT
 public:
@@ -36,23 +33,17 @@ public slots:
     void startAcquisition(const QString &fileName, int frameCount) {
         m_abort = false;
         emit logMessage("Initializing detector...");
-        // Simulate initialization delay
-        QThread::sleep(1);
+        QThread::sleep(1);  // simulate initialization delay
         emit logMessage("Detector initialized.");
         emit logMessage(QString("Starting acquisition for %1 frame(s)...").arg(frameCount));
-        
-        // Dimensions for our simulated image
-        const int width = 320;
-        const int height = 240;
-        
-        // Acquire frames in a loop.
+
+        const int width = 320, height = 240;
         for (int i = 1; i <= frameCount; ++i) {
             if (m_abort) {
                 emit logMessage("Acquisition aborted by user.");
                 break;
             }
-            
-            // Simulate capturing a frame:
+            // Create a simulated frame: a grayscale image with random pixel values.
             QImage frame(width, height, QImage::Format_Grayscale8);
             for (int y = 0; y < height; ++y) {
                 uchar *line = frame.scanLine(y);
@@ -60,23 +51,19 @@ public slots:
                     line[x] = static_cast<uchar>(QRandomGenerator::global()->bounded(256));
                 }
             }
-            // Emit the new frame for live display.
             emit frameReady(frame);
             emit logMessage(QString("Acquired frame %1 of %2.").arg(i).arg(frameCount));
             emit frameCaptured(i, frameCount);
-            // Simulate a delay between frames.
-            QThread::sleep(1);
+            QThread::sleep(1);  // simulate delay between frames
         }
-        
         if (!m_abort) {
             emit logMessage("Acquisition complete. Saving frames...");
             QThread::sleep(1);
-            // In a real implementation you would call Acquisition_SaveFile()
             emit logMessage(QString("Frames successfully saved to %1.his").arg(fileName));
         }
         emit acquisitionFinished();
     }
-    
+
     void abortAcquisition() {
         m_abort = true;
     }
@@ -91,11 +78,12 @@ private:
     bool m_abort;
 };
 
-// ======================================================================
+// ------------------------------------------------------------------
 // MainWindow
-// The main window contains controls for entering a file name and frame count,
-// Start/Stop buttons, a progress bar, a log output, and a live view display.
-// ======================================================================
+// This MainWindow provides a simple GUI with input fields for a file name
+// and frame count, Start/Stop buttons, a progress bar, a live view area,
+// and a log area.
+// ------------------------------------------------------------------
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
@@ -103,22 +91,19 @@ public:
         : QMainWindow(parent)
     {
         setupUI();
-        
+
         // Create the acquisition worker and move it to its own thread.
         worker = new AcquisitionWorker();
         workerThread = new QThread(this);
         worker->moveToThread(workerThread);
         connect(workerThread, &QThread::finished, worker, &QObject::deleteLater);
-        
-        // Connect signals from the worker to update the GUI.
         connect(worker, &AcquisitionWorker::logMessage, this, &MainWindow::appendLog);
         connect(worker, &AcquisitionWorker::frameCaptured, this, &MainWindow::updateProgress);
         connect(worker, &AcquisitionWorker::acquisitionFinished, this, &MainWindow::onAcquisitionFinished);
         connect(worker, &AcquisitionWorker::frameReady, this, &MainWindow::updateLiveView);
-        
         workerThread->start();
     }
-    
+
     ~MainWindow() override {
         workerThread->quit();
         workerThread->wait();
@@ -130,60 +115,56 @@ private slots:
         stopButton->setEnabled(true);
         logTextEdit->clear();
         progressBar->setValue(0);
-        
         QString fileName = fileNameEdit->text().trimmed();
         if (fileName.isEmpty())
             fileName = "capture";
         int frameCount = frameSpinBox->value();
-        
         appendLog("Starting acquisition...");
-        // Call startAcquisition() on the worker in its thread.
         QMetaObject::invokeMethod(worker, "startAcquisition",
                                   Q_ARG(QString, fileName),
                                   Q_ARG(int, frameCount));
     }
-    
+
     void onStopClicked() {
         appendLog("Stopping acquisition...");
         QMetaObject::invokeMethod(worker, "abortAcquisition");
         stopButton->setEnabled(false);
     }
-    
+
     void appendLog(const QString &msg) {
         logTextEdit->append(msg);
     }
-    
+
     void updateProgress(int currentFrame, int totalFrames) {
         int progress = (currentFrame * 100) / totalFrames;
         progressBar->setValue(progress);
     }
-    
+
     void onAcquisitionFinished() {
         appendLog("Acquisition finished.");
         startButton->setEnabled(true);
         stopButton->setEnabled(false);
     }
-    
-    // This slot updates the live view area with the new frame.
+
     void updateLiveView(const QImage &frame) {
         liveViewLabel->setPixmap(QPixmap::fromImage(frame).scaled(
             liveViewLabel->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
     }
-    
+
 private:
     void setupUI() {
         QWidget *central = new QWidget(this);
         QVBoxLayout *mainLayout = new QVBoxLayout(central);
-        
-        // File name input.
+
+        // File name input
         QHBoxLayout *fileLayout = new QHBoxLayout();
         QLabel *fileLabel = new QLabel("File Name:");
         fileNameEdit = new QLineEdit();
         fileLayout->addWidget(fileLabel);
         fileLayout->addWidget(fileNameEdit);
         mainLayout->addLayout(fileLayout);
-        
-        // Number of frames input.
+
+        // Number of frames input
         QHBoxLayout *frameLayout = new QHBoxLayout();
         QLabel *frameLabel = new QLabel("Number of Frames:");
         frameSpinBox = new QSpinBox();
@@ -192,8 +173,8 @@ private:
         frameLayout->addWidget(frameLabel);
         frameLayout->addWidget(frameSpinBox);
         mainLayout->addLayout(frameLayout);
-        
-        // Start and Stop buttons.
+
+        // Start and Stop buttons
         QHBoxLayout *buttonLayout = new QHBoxLayout();
         startButton = new QPushButton("Start Acquisition");
         stopButton = new QPushButton("Stop Acquisition");
@@ -201,13 +182,13 @@ private:
         buttonLayout->addWidget(startButton);
         buttonLayout->addWidget(stopButton);
         mainLayout->addLayout(buttonLayout);
-        
-        // Progress bar.
+
+        // Progress bar
         progressBar = new QProgressBar();
         progressBar->setRange(0, 100);
         mainLayout->addWidget(progressBar);
-        
-        // Live view area.
+
+        // Live view area
         QLabel *liveViewTitle = new QLabel("Live View:");
         mainLayout->addWidget(liveViewTitle);
         liveViewLabel = new QLabel();
@@ -215,23 +196,23 @@ private:
         liveViewLabel->setFrameStyle(QFrame::Box | QFrame::Sunken);
         liveViewLabel->setAlignment(Qt::AlignCenter);
         mainLayout->addWidget(liveViewLabel);
-        
-        // Log output.
+
+        // Log output
         QLabel *logTitle = new QLabel("Log:");
         mainLayout->addWidget(logTitle);
         logTextEdit = new QTextEdit();
         logTextEdit->setReadOnly(true);
         mainLayout->addWidget(logTextEdit);
-        
+
         setCentralWidget(central);
         setWindowTitle("Acquisition Live View GUI");
-        
-        // Connect button signals.
+
+        // Connect button signals
         connect(startButton, &QPushButton::clicked, this, &MainWindow::onStartClicked);
         connect(stopButton, &QPushButton::clicked, this, &MainWindow::onStopClicked);
     }
-    
-    // UI elements.
+
+    // UI elements
     QLineEdit    *fileNameEdit;
     QSpinBox     *frameSpinBox;
     QPushButton  *startButton;
@@ -239,17 +220,14 @@ private:
     QTextEdit    *logTextEdit;
     QProgressBar *progressBar;
     QLabel       *liveViewLabel;
-    
-    // Worker and thread.
+
+    // Worker and thread
     AcquisitionWorker *worker;
     QThread           *workerThread;
 };
 
 #include "main.moc"
 
-// ======================================================================
-// main() function
-// ======================================================================
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
